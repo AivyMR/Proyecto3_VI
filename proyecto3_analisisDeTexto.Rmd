@@ -1,0 +1,135 @@
+---
+title: "Análisis de emociones de 'El cumpleaños de la infanta'"
+author: "Erick_Kauffmann-Aivy_Masís"
+date: "2025-06-28"
+output: html_document
+---
+
+## Introducción
+
+Este documento presenta un análisis de sentimientos aplicado al cuento "El cumpleaños de la infanta" de Oscar Wilde, utilizando herramientas de procesamiento de texto en R. A partir de distintas visualizaciones, como la nube de palabras, el gráfico de polaridad, el conteo de emociones, el arco emocional y la red de palabras frecuentes, se busca explorar el tono emocional del texto y las principales temáticas que lo atraviesan.
+El objetivo no es solo identificar qué emociones predominan, sino también comprender cómo Wilde construye un relato lleno de contrastes, donde la belleza y la crueldad conviven, y donde lo infantil se mezcla con lo trágico. A través de estas técnicas de visualización, se revela una estructura narrativa llena de simbolismo y emociones complejas que aportan nuevas formas de interpretar la obra.
+
+Algunos de los gráficos generados se le aplicó la limitación a cierto número de palabras para lograr una mejor visualización de la gráfica y poder realizar una mejor interpretación de emociones, contexto y flujo de los acontecimientos.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+library(tidytext)
+library(ggwordcloud)
+library(dplyr)
+library(ggplot2)
+library(viridis)
+library(syuzhet)
+library(tm)
+library(igraph)
+
+texto <- readLines("E:/TEC/Visualizacion de informacion/proyecto3/El cumpleanos de la infanta.txt", encoding = "UTF-8")
+texto <- paste(texto, collapse = " ")
+```
+
+## Nubes de palabras
+
+La nube de palabras generada a partir del cuento "El cumpleaños de la infanta" muestra que hay ciertos términos que se repiten con mucha frecuencia y que están directamente relacionados con los elementos centrales del relato. La palabra más destacada es “infanta” lo cual no sorprende porque ella es la protagonista de la historia y todo gira alrededor de su cumpleaños y sus emociones. También aparecen con bastante fuerza palabras como “enanito”, “niños”, “bosque”, “monstruo” y “palacio”. Estas nos hablan tanto del contexto del cuento como de los elementos más simbólicos o emocionales que se van desarrollando a lo largo del texto.
+
+Es interesante cómo se combinan palabras que remiten al lujo, como “plata”, “reina” y “trono”, con otras que muestran ternura, naturaleza como “corazón”, “flores” y “labios”.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+datos_nube <- tibble(texto = texto) %>%
+  unnest_tokens(palabra, texto) %>%
+  anti_join(get_stopwords("es", source = "snowball"), by = c("palabra" = "word")) %>%
+  count(palabra, sort = TRUE) %>%
+  filter(nchar(palabra) > 4) %>%
+  slice_max(n, n = 50)
+ggplot(datos_nube, aes(label = palabra, size = n, color = n)) +
+  geom_text_wordcloud(eccentricity = 0.8) +
+  scale_size_area(max_size = 15) +
+  scale_color_gradient(low = "#1a9641", high = "#d7191c") +
+  theme_minimal()
+```
+
+## Análisis de polaridad
+
+El gráfico de polaridad muestra cómo varía la carga emocional del cuento a lo largo de sus oraciones. En este caso, se utilizó el método Bing para clasificar las oraciones como positivas, negativas o neutras. Lo que más llama la atención es que la mayor parte del texto se mueve entre polaridades negativas o neutras, con pocos picos realmente positivos.
+En varias secciones hay una caída clara hacia valores negativos, lo que indica la presencia de palabras cargadas emocionalmente hacia la tristeza, la decepción o el rechazo. Esto es coherente con el tono general del cuento, que a pesar de tener momentos visuales muy bonitos o festivos, tiene un fondo melancólico y hasta cruel, especialmente relacionado con el personaje del enanito y su interacción con la infanta.
+También se pueden ver algunos picos positivos, pero son esporádicos y no duran mucho. Esto sugiere que la historia tiene breves momentos de alegría o ternura, pero rápidamente vuelven a un tono más serio o doloroso.
+En resumen, el gráfico respalda esa dualidad emocional del cuento: por fuera todo parece colorido y encantador, pero por dentro hay una tristeza profunda que atraviesa todo el relato.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+oraciones <- get_sentences(texto)
+polaridad <- get_sentiment(oraciones, method = "bing", language = "spanish")
+plot(polaridad, type = "l", col = "#FF6B6B", lwd = 2,
+     ylab = "Polaridad", xlab = "Oración")
+abline(h = 0, lty = 2, col = "gray")
+```
+
+## Conteo de emociones
+Este gráfico muestra la distribución de emociones en el cuento, utilizando el léxico NRC. Lo primero que salta a la vista es que hay una cantidad bastante balanceada de palabras positivas y negativas, con una leve ventaja para las positivas. Sin embargo, la diferencia no es tan marcada, lo que refleja la ambigüedad emocional del cuento, hay momentos alegres, pero también muchos otros que transmiten tristeza.
+Entre las emociones específicas, se destacan la tristeza, la confianza, el miedo y la alegría. Es interesante que la tristeza esté más presente que la alegría, lo cual tiene mucho sentido considerando el giro emocional que da la historia, especialmente hacia el final, cuando el enanito se da cuenta de la burla y lo que eso significa para él. La presencia notable de confianza y miedo sugiere que hay cierta tensión narrativa entre sentirse seguro o en armonía, como lo hace el enanito mientras baila, por ejemplo, y el miedo que se manifiesta en momentos de conflicto o soledad.
+También se observan emociones como la ira, la sorpresa y el disgusto, aunque en menor proporción. Esto podría estar ligado a cómo se presentan ciertos personajes, como don Pedro o incluso las flores que reaccionan negativamente al enanito, así como los eventos que rompen la armonía del entorno en apariencia festivo.
+En general, el gráfico confirma que el cuento no es simplemente una historia infantil o alegre, sino que está cargado de emociones complejas, muchas veces contradictorias.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+emociones <- get_nrc_sentiment(texto, language = "spanish")
+emociones_sum <- colSums(emociones)
+datos_emociones <- data.frame(
+  emocion = names(emociones_sum),
+  valor = as.numeric(emociones_sum)
+)
+ggplot(datos_emociones, aes(x = reorder(emocion, -valor), y = valor, fill = emocion)) +
+  geom_col() +
+  scale_fill_viridis_d() +
+  labs(x = NULL, y = "Frecuencia") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        plot.title = element_text(face = "bold"),
+        plot.subtitle = element_text(color = "gray40"))
+
+```
+
+## Arco emocional
+
+El gráfico del arco emocional muestra cómo cambia la intensidad emocional del cuento a lo largo del texto. Comienza con un tono alto y positivo, probablemente por la celebración y el ambiente festivo del palacio. Sin embargo, pronto cae fuertemente, reflejando el momento en que el enanito aparece y empieza a ser ridiculizado sin saberlo.
+Más adelante, hay una leve recuperación emocional, que podría representar la ilusión del enanito al sentirse aceptado. Pero esta subida no dura mucho, y vuelve a caer cuando él descubre la verdad, reflejando el momento más triste y trágico del cuento. Al final, la emoción sube un poco, pero no logra alcanzar la positividad del inicio, lo que deja una sensación melancólica.
+Este arco refleja bien la estructura emocional del cuento: empieza con alegría superficial, atraviesa una profunda tristeza, y termina con una sensación de disgusto.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+arco <- get_dct_transform(polaridad, scale_range = TRUE)
+plot(arco, type = "o", col = "#9C27B0", lwd = 2,
+     xlab = "Segmentos del texto", ylab = "Intensidad emocional")
+abline(h = 0, lty = 2, col = "gray")
+```
+
+## Red de palabras
+
+La red de palabras más frecuentes muestra cómo ciertos términos aparecen juntos de forma repetida a lo largo del cuento. Visualmente, se nota que hay muchas conexiones entre las palabras, lo que indica que el texto tiene una estructura narrativa muy robusta, con temas que se entrelazan constantemente.
+Palabras como “infanta”, “enanito”, “niños”, “palacio”, “bosque” y “flores” están bien conectadas con otras, lo cual tiene sentido porque son parte del núcleo temático del cuento. Estas conexiones refuerzan la imagen de un entorno natural y equilibrado, donde se mezclan lo inocente con lo cruel, lo tierno con lo simbólico.
+También se ven palabras como “monstruo”, “parecía”, “cabeza” o “rosa”, que dan pistas sobre las metáforas o las descripciones físicas/ y emocionales que el autor usa para construir contrastes. Muchas de estas palabras están cargadas de significado visual o simbólico.
+
+Por lo que esta red refleja cómo el cuento no solo gira alrededor de ciertos personajes o lugares, sino también de sensaciones y percepciones que se repiten y se conectan entre sí, dando como resultado un estilo narrativo visual y emotivo.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+docs <- Corpus(VectorSource(texto))
+docs <- tm_map(docs, content_transformer(tolower))
+docs <- tm_map(docs, removePunctuation)
+docs <- tm_map(docs, removeNumbers)
+docs <- tm_map(docs, removeWords, stopwords("spanish"))
+tdm <- TermDocumentMatrix(docs)
+m <- as.matrix(tdm)
+
+word_freq <- rowSums(m)
+palabras_frecuentes <- names(sort(word_freq, decreasing = TRUE))[1:30]
+m_frec <- m[palabras_frecuentes, ]
+m2 <- m_frec %*% t(m_frec)
+diag(m2) <- 0
+g <- graph.adjacency(m2 > 0, weighted = TRUE, mode = "undirected")
+plot(g, vertex.label.cex = 1,
+     vertex.size = sqrt(word_freq[V(g)$name]) * 0.6,
+     vertex.label.color = "black",
+     edge.color = "gray70")
+```
+
+## Conclusiones
+
+A lo largo del texto se percibe una fuerte dualidad emocional, aunque el ambiente inicial parece alegre y festivo, tanto la polaridad como el arco emocional evidencian una evolución hacia la tristeza, reflejando el contraste entre la apariencia superficial y la profundidad emocional del cuento.
+El análisis de emociones muestra que, aunque hay una presencia considerable de palabras positivas, las emociones negativas como la tristeza, el miedo y el disgusto también tienen un peso importante. Esto sugiere que Wilde no solo busca contar una historia, sino provocar una reflexión más profunda sobre la crueldad disfrazada de inocencia.
+Las palabras más frecuentes y su red de conexiones destacan la importancia del entorno, los personajes y sus características simbólicas. La constancia en estas asociaciones revela un estilo literario cargado de metáforas, detalles visuales y una narrativa emocionalmente compleja.
+
